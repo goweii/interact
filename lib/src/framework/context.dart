@@ -177,7 +177,7 @@ class Context {
         _console.cursorPosition = Coordinate(screenRow, screenColOffset);
         _console.eraseCursorToEnd();
         write(buffer);
-        _console.cursorPosition = dc.Coordinate(
+        _console.cursorPosition = Coordinate(
           screenRow,
           screenColOffset + _getRenderWidth(buffer.substring(0, index)),
         );
