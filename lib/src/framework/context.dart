@@ -99,10 +99,13 @@ class Context {
       write(buffer);
     }
 
+    final utf8Buffer = <int>[];
+
     while (true) {
       final key = readKey();
 
       if (key.isControl) {
+        utf8Buffer.clear();
         switch (key.controlChar) {
           case ControlCharacter.enter:
             writeln();
@@ -154,15 +157,18 @@ class Context {
             break;
         }
       } else {
-        if (buffer.length < bufferMaxLength) {
-          if (index == buffer.length) {
-            buffer += key.char;
-            index++;
-          } else {
-            buffer =
-                buffer.substring(0, index) + key.char + buffer.substring(index);
-            index++;
-          }
+        utf8Buffer.addAll(key.char.codeUnits);
+        final String text;
+        try {
+          text = utf8.decode(utf8Buffer);
+          utf8Buffer.clear();
+        } catch (_) {
+          // invalid UTF-8, wait for more characters
+          continue;
+        }
+        if (_getRenderWidth(buffer) + _getRenderWidth(text) <= bufferMaxLength) {
+          buffer = buffer.substring(0, index) + text + buffer.substring(index);
+          index += text.length;
         }
       }
 
@@ -171,8 +177,10 @@ class Context {
         _console.cursorPosition = Coordinate(screenRow, screenColOffset);
         _console.eraseCursorToEnd();
         write(buffer);
-        _console.cursorPosition =
-            Coordinate(screenRow, screenColOffset + index);
+        _console.cursorPosition = dc.Coordinate(
+          screenRow,
+          screenColOffset + _getRenderWidth(buffer.substring(0, index)),
+        );
         _console.showCursor();
       }
     }
@@ -214,4 +222,41 @@ class BufferContext extends Context {
     buffer.write(text);
     setState();
   }
+}
+
+/// Checks if a **single character** is a **full-width character** (occupies 2 columns).
+/// Authoritative standard: Unicode East Asian Width (EAW)
+bool _isFullWidthCharacter(String char) {
+  if (char.isEmpty) return false;
+  // Only handle single visual characters (avoid combining characters/corrupted text)
+  if (char.characters.length != 1) return false;
+
+  final code = char.runes.first;
+
+  // 1. CJK Unified Ideographs (all Chinese characters)
+  if (code >= 0x4E00 && code <= 0x9FFF) return true;
+  // 2. Japanese Hiragana and Katakana
+  if (code >= 0x3040 && code <= 0x30FF) return true;
+  // 3. Korean Hangul Syllables
+  if (code >= 0xAC00 && code <= 0xD7AF) return true;
+  // 4. Full-width punctuation marks
+  if (code >= 0x3000 && code <= 0x303F) return true;
+  // 5. Full-width letters/digits/symbols (Ａ Ｂ Ｃ １２３！＠＃)
+  if (code >= 0xFF00 && code <= 0xFFEF) return true;
+  // 6. Emoji & special symbols (occupy 2 columns in terminal)
+  if (code >= 0x1F600 && code <= 0x1F64F) return true; // Emoticons
+  if (code >= 0x1F300 && code <= 0x1F5FF) return true; // Icons
+  // 7. Full-width space (especially important)
+  if (code == 0x3000) return true;
+
+  return false;
+}
+
+/// Calculates the render width of a string.
+int _getRenderWidth(String text) {
+  int width = 0;
+  for (final char in text.characters) {
+    width += _isFullWidthCharacter(char) ? 2 : 1;
+  }
+  return width;
 }
