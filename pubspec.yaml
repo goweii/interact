@@ -10,6 +10,7 @@ dependencies:
   dart_console: ^1.1.2
   meta: ^1.8.0
   tint: ^2.0.0
+  characters: ^1.4.1
 
 dev_dependencies:
   lint: ^2.0.1
